@@ -124,6 +124,7 @@ export function detectBigPlays(
       rawText: text,
       quarter: play.period?.number ?? 0,
       clock: play.clock?.displayValue ?? "",
+      wallclock: play.wallclock ?? null,
       scoreAfter: { home: play.homeScore ?? 0, away: play.awayScore ?? 0 },
       status,
       fantasyOwner: null,

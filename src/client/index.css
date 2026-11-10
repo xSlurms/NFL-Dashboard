@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme {
+  --color-mine: #fbbf24; /* gold: my player */
+  --color-theirs: #f87171; /* red: my opponent's player */
+  --animate-flash-up: flash-up 2.5s ease-out;
+  --animate-flash-down: flash-down 2.5s ease-out;
+  --animate-toast-in: toast-in 0.25s ease-out;
+
+  @keyframes flash-up {
+    0%, 30% { background-color: rgb(34 197 94 / 0.45); }
+    100% { background-color: transparent; }
+  }
+  @keyframes flash-down {
+    0%, 30% { background-color: rgb(239 68 68 / 0.45); }
+    100% { background-color: transparent; }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "tnum";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+  }
+}

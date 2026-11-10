@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "netlify dev",
+    "dev:vite": "vite",
+    "build": "vite build",
     "discover:nfl": "node scripts/discover-nfl.ts",
     "discover:fantasy": "node scripts/discover-fantasy.ts",
     "record:live": "node scripts/record-live.ts",
@@ -14,9 +16,19 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
     "@types/node": "^26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
     "netlify-cli": "27.14.3",
+    "tailwindcss": "4.3.3",
     "typescript": "~6.0.3",
+    "vite": "8.3.5",
     "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

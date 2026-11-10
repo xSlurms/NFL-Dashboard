@@ -9,6 +9,8 @@ export interface EspnPlay {
   homeScore?: number;
   period?: { number?: number };
   clock?: { displayValue?: string };
+  /** Real-world time of the play (ISO). */
+  wallclock?: string;
   scoringPlay?: boolean;
   /** For kickoffs and punts this is the kicking team. */
   start?: { team?: { id?: string } };

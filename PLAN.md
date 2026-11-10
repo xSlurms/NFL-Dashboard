@@ -165,9 +165,13 @@ Also define `Game`, `FantasyMatchup`, `FantasyTeam`, `RosterSlot`.
 - Built: `netlify/functions/*` (thin wrappers), `src/server/api/handlers.ts`, the `NflDataSource` / `FantasySource` adapters in `src/server/`, normalizers in `src/server/espn/`. Tests cover the normalizers against fixtures and live snapshots, and the handlers and adapters with ESPN stubbed.
 - Still to check during a live game: how fast the core API names players on new plays. `npm run record:live` now saves the core play list every 30s.
 
-**Phase 3: UI.**
+**Phase 3: UI.** Done 2026-11-10.
 - Scoreboard, matchup panel, ticker, alerts, settings.
 - **Replay mode:** a `?replay=fixtures/<game>` URL param that feeds saved fixtures through the app with a timer, so the page can be tested on a Tuesday. Dev builds only: fixtures must not ship to the deployed site.
+- As built: `src/client/` (React + Tailwind). Replay is `http://localhost:8888/?replay=fixtures/live/401873051`, with an optional `&team=<id>` to replay as another team in the league (team 20 starts the Vikings D/ST, which gets an alert in Q1). A dev-only Vite middleware (`src/dev/`) serves it; the production build was checked to contain no replay code or fixture paths.
+- The browser polls `/api/fantasy` first, then the scoreboard for the same week (ESPN's default scoreboard lags a day behind fantasy on Tuesdays).
+- Alerts fire only for plays first seen after a game's first fetch, so loading the page mid-game or changing a setting doesn't set off a burst.
+- A play counts as "mine" if my starter is in it in any role, so an interception thrown by my QB or a fumble by my WR is flagged and alerts too.
 
 **Phase 4: Deploy.**
 - Deploy to Netlify. Cookies go in Netlify environment variables, not the repo.

@@ -31,6 +31,7 @@ export interface BigPlay {
   rawText: string; // ESPN's full play text
   quarter: number; // 5 = overtime
   clock: string;
+  wallclock: string | null; // real-world time of the play (ISO), for ordering plays across games
   scoreAfter: { home: number; away: number };
   status: "active" | "overturned";
   fantasyOwner: "me" | "opponent" | "other" | null; // set after the detector, from the matchup rosters

@@ -20,7 +20,7 @@ const matchup: FantasyMatchup = {
 
 const play = (overrides: Partial<BigPlay>): BigPlay => ({
   id: "1", gameId: "g", tags: ["TD"], primaryPlayer: null, secondaryPlayers: [], defenseTeamId: null, yards: null,
-  description: "", rawText: "", quarter: 1, clock: "15:00", scoreAfter: { home: 0, away: 0 }, status: "active", fantasyOwner: null,
+  description: "", rawText: "", quarter: 1, clock: "15:00", wallclock: null, scoreAfter: { home: 0, away: 0 }, status: "active", fantasyOwner: null,
   ...overrides,
 });
 
