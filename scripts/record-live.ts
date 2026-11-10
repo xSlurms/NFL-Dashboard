@@ -1,6 +1,6 @@
 // Waits for kickoff, then snapshots one game until it ends.
 // Usage: npm run record:live -- <eventId>
-// Writes gzipped JSON to fixtures/live/<eventId>/: summary every 30s, scoreboard and fantasy every 60s.
+// Writes gzipped JSON to fixtures/live/<eventId>/: summary and core play list every 30s, scoreboard and fantasy every 60s.
 import { NFL_BASE, getLiveFantasy, getJson, save, sleep } from "./lib.ts";
 
 const eventId = process.argv[2];
@@ -9,6 +9,7 @@ if (!eventId) {
   process.exit(1);
 }
 
+const CORE_BASE = "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl";
 const TICK_MS = 30_000;
 const START_BEFORE_KICKOFF_MS = 5 * 60_000;
 const MAX_RECORDING_MS = 6 * 60 * 60_000;
@@ -76,6 +77,13 @@ for (let tick = 0; !finished && Date.now() - startedAt < MAX_RECORDING_MS; tick+
     log(`Snapshot ${tick + 1}`);
   } catch (error) {
     log(`Summary failed: ${messageOf(error)}`);
+  }
+
+  // Shows how soon the core API names the players on a new play.
+  try {
+    save(`${dir}/core-${time}.json.gz`, await getJson(`${CORE_BASE}/events/${eventId}/competitions/${eventId}/plays?limit=400`), true);
+  } catch (error) {
+    log(`Core plays failed: ${messageOf(error)}`);
   }
 
   if (!finished) await sleep(Math.max(0, TICK_MS - (Date.now() - tickStart)));

@@ -6,6 +6,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "netlify dev",
     "discover:nfl": "node scripts/discover-nfl.ts",
     "discover:fantasy": "node scripts/discover-fantasy.ts",
     "record:live": "node scripts/record-live.ts",
@@ -14,7 +15,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "typescript": "^7.0.2",
+    "netlify-cli": "27.14.3",
+    "typescript": "~6.0.3",
     "vitest": "^5.1.0"
   }
 }

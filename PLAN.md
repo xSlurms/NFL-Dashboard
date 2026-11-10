@@ -71,6 +71,11 @@ Why functions instead of calling ESPN from the browser:
 
 Keep functions stateless. The function returns each live game's current big plays and the browser diffs that against what it has shown, so new plays, corrected plays and overturned plays all arrive the same way. Set short CDN cache headers (about 10-15s) on responses so repeat loads don't hammer ESPN.
 
+As built in Phase 2:
+- `/api/plays` covers in-progress games by default; `?events=id,id` (max 16) names games instead, so the browser can keep polling a game for a few minutes after it goes final and catch late corrections. Big-play thresholds travel as query params (`rush`, `catch`, `fumbles`, `fgMade`, `fgMissed`) from the settings panel.
+- `fantasyOwner` is filled in by the browser with `src/shared/fantasyOwner.ts`, joining `/api/plays` with `/api/fantasy`, so the plays function never needs fantasy data.
+- Scoreboard and plays are cached on Netlify's CDN (10s while games are live, 60s otherwise). Fantasy is `private, max-age=10` and never CDN-cached.
+
 Build the ESPN calls behind an adapter interface (`NflDataSource`, `FantasySource`) so a paid feed or another fantasy platform (Sleeper, Yahoo) can be swapped in later without touching the UI.
 
 ## 6. Data sources
@@ -85,7 +90,7 @@ These are undocumented endpoints. Structure has changed before. Phase 0 exists t
 **ESPN fantasy (private league, cookies required):**
 - Base: `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}/segments/0/leagues/{leagueId}`
 - Useful views (pass as repeated `view=` params): `mTeam`, `mRoster`, `mMatchup`, `mMatchupScore`, `mBoxscore`, `mSettings`, with `scoringPeriodId={week}`
-- Send cookies `espn_s2` and `SWID` (SWID includes the curly braces).
+- Send cookies `espn_s2` and `SWID` (SWID includes the curly braces). **Found 2026-11-10: the league is set to public (`settings.isPublic`), and every view reads the same with no cookies.** The functions send cookies only when they're set; if the league goes private, the fantasy endpoint returns an `espn_auth` error.
 - Live points: `totalPointsLive` per matchup side, `appliedStatTotal` per player. Confirmed in Phase 0, see `docs/phase0-findings.md`.
 
 **Player ID matching:** Confirmed in Phase 0: ESPN fantasy player IDs are the NFL athlete IDs, and D/ST IDs are `-16000 - proTeamId`. The summary's plays carry no player IDs, so they come from the core API's `participants`.
@@ -154,9 +159,11 @@ Also define `Game`, `FantasyMatchup`, `FantasyTeam`, `RosterSlot`.
 - Unit tests against saved fixtures from at least 3 finished games. Include a game with a pick-six, a fumble, a nullified play, and a long TD catch.
 - Acceptance: running it on a finished game lists every TD and every 25+ rush / 40+ catch, with zero penalty-negated plays.
 
-**Phase 2: Functions + local dev.**
-- Netlify Functions for the three endpoints, run with `netlify dev`.
+**Phase 2: Functions + local dev.** Done 2026-11-10.
+- Netlify Functions for the three endpoints, run with `netlify dev` (`npm run dev`, http://localhost:8888).
 - Functions read the `.env` created in Phase 0.
+- Built: `netlify/functions/*` (thin wrappers), `src/server/api/handlers.ts`, the `NflDataSource` / `FantasySource` adapters in `src/server/`, normalizers in `src/server/espn/`. Tests cover the normalizers against fixtures and live snapshots, and the handlers and adapters with ESPN stubbed.
+- Still to check during a live game: how fast the core API names players on new plays. `npm run record:live` now saves the core play list every 30s.
 
 **Phase 3: UI.**
 - Scoreboard, matchup panel, ticker, alerts, settings.
@@ -188,6 +195,7 @@ Also define `Game`, `FantasyMatchup`, `FantasyTeam`, `RosterSlot`.
 ## 12. How Claude Code should work on this
 
 - Stack: Vite, React, TypeScript, Tailwind, Vitest, Netlify Functions.
+- Stay on TypeScript 6.0.x: netlify-cli's bundler needs TypeScript's JavaScript API, which TypeScript 7 doesn't have.
 - Keep ESPN-specific parsing in `src/server/espn/`. UI code should only see the types in `src/shared/types.ts`.
 - Finish and test each phase before starting the next. Stop after Phase 0 and Phase 1 for Tom to review.
 - When a field's location in ESPN's JSON is uncertain, check the fixtures instead of guessing.

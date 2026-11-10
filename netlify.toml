@@ -1,0 +1,11 @@
+[build]
+  # Phase 3 adds the Vite build; until then the site is the placeholder page in public/.
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[dev]
+  framework = "#static"
+  port = 8888

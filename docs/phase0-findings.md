@@ -53,3 +53,9 @@ Sources: 14 finished Week 9 games (`fixtures/nfl/`), the full league pull (`fixt
 - **Yards appear to score in whole 10-yard chunks:** 16 rushing yards counted as 1.0 point. Check `settings.scoringSettings` before computing points ourselves (Phase 5).
 - **Payload size:** the full league pull is 21 MB. For polling, request only `view=mMatchupScore&view=mBoxscore` with header `x-fantasy-filter: {"schedule":{"filterMatchupPeriodIds":{"value":[week]}}}` (1.2 MB, same live fields). See `getLiveFantasy` in `scripts/lib.ts`.
 - `members[]` holds every league member's name and SWID: never send it to the browser.
+
+### Added in Phase 2 (2026-11-10)
+- **The league is public** (`settings.isPublic: true`). The live views return byte-identical data with good cookies, bogus cookies or none, so the cookies are optional while it stays public.
+- **Current week:** `?view=mStatus` (1.2 KB, no cookies needed) gives `scoringPeriodId` and `status.currentMatchupPeriod`. ESPN moved to week 10 by Tuesday morning, while the NFL scoreboard's default still showed week 9.
+- The live views (`mMatchupScore` + `mBoxscore`) also carry `teams[]` (name, abbrev, logo) and per-player `stats[]`, where `statSourceId: 1` for the current `scoringPeriodId` is the week's projection.
+- The starters' `appliedStatTotal` values add up to `totalPointsLive` in all 158 polling snapshots from Monday night.

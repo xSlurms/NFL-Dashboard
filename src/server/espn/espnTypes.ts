@@ -41,4 +41,76 @@ export interface EspnCorePlay {
 
 export interface EspnCorePlayList {
   items: EspnCorePlay[];
+  pageCount?: number;
+}
+
+// ---- Scoreboard (/scoreboard) ----
+
+export interface EspnStatus {
+  displayClock?: string;
+  period?: number;
+  type: { state: string; detail?: string; shortDetail?: string };
+}
+
+export interface EspnCompetitor {
+  homeAway: "home" | "away";
+  score?: string;
+  team: { id: string; abbreviation: string; displayName?: string; logo?: string };
+  records?: { type?: string; summary?: string }[];
+}
+
+export interface EspnEvent {
+  id: string;
+  date: string;
+  status?: EspnStatus;
+  competitions: {
+    status?: EspnStatus;
+    competitors: EspnCompetitor[];
+    situation?: {
+      possession?: string;
+      isRedZone?: boolean;
+      downDistanceText?: string;
+      lastPlay?: { text?: string };
+    };
+  }[];
+}
+
+export interface EspnScoreboard {
+  season?: { year?: number; type?: number };
+  week?: { number?: number; teamsOnBye?: { id: string }[] };
+  events?: EspnEvent[];
+}
+
+// ---- Fantasy (lm-api-reads.fantasy.espn.com, views mMatchupScore + mBoxscore) ----
+
+export interface EspnFantasyRosterEntry {
+  lineupSlotId: number;
+  playerId: number;
+  playerPoolEntry?: {
+    appliedStatTotal?: number;
+    player?: {
+      fullName?: string;
+      defaultPositionId?: number;
+      proTeamId?: number;
+      stats?: { statSourceId?: number; scoringPeriodId?: number; appliedTotal?: number }[];
+    };
+  };
+}
+
+export interface EspnFantasySide {
+  teamId: number;
+  totalPoints?: number;
+  totalPointsLive?: number;
+  totalProjectedPoints?: number;
+  totalProjectedPointsLive?: number;
+  winProbability?: number;
+  rosterForCurrentScoringPeriod?: { entries?: EspnFantasyRosterEntry[] };
+}
+
+export interface EspnFantasyLeague {
+  seasonId?: number;
+  scoringPeriodId?: number;
+  status?: { currentMatchupPeriod?: number };
+  teams?: { id: number; name?: string; abbrev?: string; logo?: string }[];
+  schedule?: { matchupPeriodId: number; home?: EspnFantasySide; away?: EspnFantasySide }[];
 }
