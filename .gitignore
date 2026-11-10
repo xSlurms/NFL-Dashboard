@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.netlify/
+
+# Secrets: espn_s2 is a full ESPN session
+.env
+.env.*
+!.env.example
+
+# Private league data (member names, SWIDs) and large live recordings
+fixtures/fantasy/
+fixtures/live/
