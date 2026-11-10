@@ -46,6 +46,7 @@ describe("GET /api/scoreboard", () => {
     expect((await body<Scoreboard>(res)).games).toHaveLength(15);
     expect(res.headers.get("Netlify-CDN-Cache-Control")).toContain("s-maxage=60");
     expect(res.headers.get("Cache-Control")).toContain("max-age=0");
+    expect(res.headers.get("Netlify-Vary")).toBe("header=X-Access-Key"); // no cached answer without the key
   });
 
   it("drops the CDN cache to 10s while a game is live", async () => {

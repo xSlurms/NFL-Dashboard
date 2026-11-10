@@ -171,11 +171,13 @@ Also define `Game`, `FantasyMatchup`, `FantasyTeam`, `RosterSlot`.
 - As built: `src/client/` (React + Tailwind). Replay is `http://localhost:8888/?replay=fixtures/live/401873051`, with an optional `&team=<id>` to replay as another team in the league (team 20 starts the Vikings D/ST, which gets an alert in Q1). A dev-only Vite middleware (`src/dev/`) serves it; the production build was checked to contain no replay code or fixture paths.
 - The browser polls `/api/fantasy` first, then the scoreboard for the same week (ESPN's default scoreboard lags a day behind fantasy on Tuesdays).
 - Alerts fire only for plays first seen after a game's first fetch, so loading the page mid-game or changing a setting doesn't set off a burst.
-- A play counts as "mine" if my starter is in it in any role, so an interception thrown by my QB or a fumble by my WR is flagged and alerts too.
+- A play counts as "mine" if my starter is in it in any role, so an interception thrown by my QB or a fumble by my WR is flagged and alerts too. Confirmed by Tom, 2026-11-10: keep flagging these.
 
-**Phase 4: Deploy.**
+**Phase 4: Deploy.** Code done 2026-11-10; the deploy itself needs Tom's Netlify login (steps in `docs/deploy.md`).
 - Deploy to Netlify. Cookies go in Netlify environment variables, not the repo.
 - Add a simple access gate: functions require a secret key header that the page stores after a one-time prompt. Keeps strangers from burning through ESPN requests on my cookies.
+- As built: `src/server/api/access.ts` checks `X-Access-Key` against `ACCESS_KEY` (constant-time, fails closed when unset outside `netlify dev`). The page shows a key prompt on any 401 and keeps the key in localStorage. `npm run access-key` creates the key on Netlify as a secret; `npm run push-env` copies the league settings (cookies only with `--with-cookies`, since the league is public).
+- Production builds get a Content-Security-Policy `<meta>` tag (Vite's dev server needs inline scripts, so dev doesn't); `netlify.toml` adds `noindex`, `X-Frame-Options: DENY` and related headers.
 
 **Phase 5 (optional, later).**
 - Compute live fantasy points myself from box-score stats + league scoring settings, if ESPN's live number lags.

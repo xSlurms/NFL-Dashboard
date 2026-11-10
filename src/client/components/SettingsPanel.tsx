@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { BigPlayRules } from "../../shared/bigPlayRules.ts";
 import type { FantasyMatchup } from "../../shared/types.ts";
+import { clearAccessKey, getAccessKey } from "../accessKey.ts";
 import { notificationsSupported, playChime, requestNotificationPermission, unlockSound } from "../alerts.ts";
 import { DEFAULT_SETTINGS, POLL_CHOICES, type Settings } from "../settings.ts";
 
@@ -109,6 +110,18 @@ export function SettingsPanel({ settings, fantasy, onChange, onClose }: Props) {
             <dt className="text-zinc-400">Season</dt>
             <dd>{fantasy?.season ?? "–"}</dd>
           </dl>
+          {getAccessKey() !== null && (
+            <button
+              type="button"
+              onClick={() => {
+                clearAccessKey();
+                location.reload();
+              }}
+              className="text-xs text-zinc-400 underline hover:text-zinc-200"
+            >
+              Forget the access key on this device
+            </button>
+          )}
         </Section>
 
         <button

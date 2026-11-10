@@ -110,11 +110,15 @@ function eventsParam(url: URL): string[] | null {
 
 // ---- responses ----
 
-/** Public NFL data: browsers revalidate every time, Netlify's CDN serves one copy for `seconds`. */
+/**
+ * Public NFL data: browsers revalidate every time, Netlify's CDN serves one copy for `seconds`.
+ * The CDN keys its copy on the access key, so a request without the key never gets a cached answer.
+ */
 function cdnCache(seconds: number): Record<string, string> {
   return {
     "Cache-Control": "public, max-age=0, must-revalidate",
     "Netlify-CDN-Cache-Control": `public, s-maxage=${seconds}, stale-while-revalidate=${seconds}`,
+    "Netlify-Vary": "header=X-Access-Key",
   };
 }
 

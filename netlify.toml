@@ -2,6 +2,9 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  NODE_VERSION = "24"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
@@ -12,3 +15,14 @@
   command = "npx vite --port 5173 --strictPort"
   targetPort = 5173
   port = 8888
+
+# Private personal page: no indexing and no framing. The Content-Security-Policy is a <meta> tag that
+# vite.config.ts adds to production builds only, because Vite's dev server needs inline scripts.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Robots-Tag = "noindex, nofollow"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

@@ -1,5 +1,6 @@
 import type { BigPlayRules } from "../shared/bigPlayRules.ts";
 import type { ApiError, ApiErrorCode, FantasyMatchup, PlaysResponse, Scoreboard } from "../shared/types.ts";
+import { getAccessKey, reportAccessDenied } from "./accessKey.ts";
 
 /** Where the page gets its data: the Netlify functions, or a recording in replay mode. */
 export interface ClientSource {
@@ -33,9 +34,12 @@ export function rulesQuery(rules: BigPlayRules): string {
 }
 
 export async function getApi<T>(path: string): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const key = getAccessKey();
+  if (key) headers["X-Access-Key"] = key;
   let res: Response;
   try {
-    res = await fetch(path, { headers: { Accept: "application/json" } });
+    res = await fetch(path, { headers });
   } catch {
     throw new ApiFetchError(0, "network", "Can't reach the server");
   }
@@ -47,6 +51,7 @@ export async function getApi<T>(path: string): Promise<T> {
   }
   if (!res.ok) {
     const error = (body as ApiError)?.error;
+    if (res.status === 401 && error?.code === "unauthorized") reportAccessDenied();
     throw new ApiFetchError(res.status, error?.code ?? "upstream", error?.message ?? `HTTP ${res.status}`);
   }
   return body as T;

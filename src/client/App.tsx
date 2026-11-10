@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { getAccessKey, isAccessDenied, setAccessKey, subscribeAccess } from "./accessKey.ts";
 import { playChime, showNotification } from "./alerts.ts";
+import { AccessGate } from "./components/AccessGate.tsx";
 import type { ClientSource } from "./api.ts";
 import { Header } from "./components/Header.tsx";
 import { Matchup } from "./components/Matchup.tsx";
@@ -26,10 +28,25 @@ export function App({ source, replay, notice }: { source: ClientSource; replay?:
     () => replay?.clock.epoch ?? 0,
   );
 
+  // The server answered 401: stop polling and ask for the key. A new key remounts the dashboard.
+  const denied = useSyncExternalStore(subscribeAccess, isAccessDenied);
+  const [session, setSession] = useState(0);
+  if (denied) {
+    return (
+      <AccessGate
+        hadKey={getAccessKey() !== null}
+        onSubmit={(key) => {
+          setAccessKey(key);
+          setSession((n) => n + 1);
+        }}
+      />
+    );
+  }
+
   return (
     <>
       {notice && <div className="bg-red-900/60 px-4 py-2 text-sm text-red-100">{notice}</div>}
-      <Dashboard key={epoch} source={source} settings={settings} onSettings={setSettings} replaying={!!replay} />
+      <Dashboard key={`${epoch}:${session}`} source={source} settings={settings} onSettings={setSettings} replaying={!!replay} />
       {replay?.bar}
     </>
   );
