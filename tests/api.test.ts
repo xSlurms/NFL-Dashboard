@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleFantasy, handlePlays, handleScoreboard } from "../src/server/api/handlers.ts";
+import { handleFantasy, handleOdds, handlePlays, handleScoreboard } from "../src/server/api/handlers.ts";
 import { detectBigPlays } from "../src/server/espn/detectBigPlays.ts";
 import { EspnFantasySource, fantasyConfigFromEnv } from "../src/server/espn/espnFantasySource.ts";
 import { EspnNflSource } from "../src/server/espn/espnNflSource.ts";
 import { normalizeScoreboard } from "../src/server/espn/normalizeScoreboard.ts";
 import { UpstreamError } from "../src/server/http.ts";
-import { FantasyAuthError, type FantasySource, type NflDataSource } from "../src/server/sources.ts";
+import { normalizeOdds } from "../src/server/espn/normalizeOdds.ts";
+import { FantasyAuthError, type FantasySource, type NflDataSource, type ScoreboardQuery } from "../src/server/sources.ts";
 import { DEFAULT_RULES, type BigPlayRules } from "../src/shared/bigPlayRules.ts";
-import type { ApiError, FantasyMatchup, GamePlays, PlaysResponse, Scoreboard } from "../src/shared/types.ts";
+import type { ApiError, FantasyMatchup, GamePlays, OddsResponse, PlaysResponse, Scoreboard } from "../src/shared/types.ts";
 import { NFL_DIR, readJson } from "./fixtures.ts";
 
 const finishedBoard = normalizeScoreboard(readJson(`${NFL_DIR}/scoreboard.json`));
@@ -26,8 +27,13 @@ class FakeNfl implements NflDataSource {
   constructor(board: Scoreboard) {
     this.board = board;
   }
+  oddsQueries: ScoreboardQuery[] = [];
   async getScoreboard() {
     return this.board;
+  }
+  async getOdds(query: ScoreboardQuery = {}): Promise<OddsResponse> {
+    this.oddsQueries.push(query);
+    return normalizeOdds(readJson(`${NFL_DIR}/scoreboard-week10-pre.json`));
   }
   async getGamePlays(gameId: string, rules: BigPlayRules): Promise<GamePlays> {
     this.calls.push({ gameId, rules });
@@ -60,6 +66,22 @@ describe("GET /api/scoreboard", () => {
     expect(bad.status).toBe(400);
     expect((await body<ApiError>(bad)).error.code).toBe("bad_request");
     expect((await handleScoreboard(get("/api/scoreboard", "POST"), nfl)).status).toBe(405);
+  });
+});
+
+describe("GET /api/odds", () => {
+  it("returns the lines for the week asked for, never cached", async () => {
+    const nfl = new FakeNfl(finishedBoard);
+    const res = await handleOdds(get("/api/odds?week=10&seasontype=2"), nfl);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Netlify-CDN-Cache-Control")).toBeNull();
+    expect(nfl.oddsQueries).toEqual([{ week: 10, seasonType: 2 }]);
+    expect((await body<OddsResponse>(res)).games).toHaveLength(14);
+  });
+
+  it("rejects a bad week", async () => {
+    expect((await handleOdds(get("/api/odds?week=99"), new FakeNfl(finishedBoard))).status).toBe(400);
   });
 });
 

@@ -1,7 +1,7 @@
 // The functions talk to data sources only through these interfaces, so a paid NFL feed or another
 // fantasy platform can be swapped in without touching the handlers or the UI.
 import type { BigPlayRules } from "../shared/bigPlayRules.ts";
-import type { FantasyMatchup, GamePlays, Scoreboard } from "../shared/types.ts";
+import type { FantasyMatchup, GamePlays, OddsResponse, Scoreboard } from "../shared/types.ts";
 
 export interface ScoreboardQuery {
   week?: number;
@@ -11,6 +11,7 @@ export interface ScoreboardQuery {
 export interface NflDataSource {
   getScoreboard(query?: ScoreboardQuery): Promise<Scoreboard>;
   getGamePlays(gameId: string, rules: BigPlayRules): Promise<GamePlays>;
+  getOdds(query?: ScoreboardQuery): Promise<OddsResponse>;
 }
 
 export interface FantasySource {

@@ -59,6 +59,7 @@ Netlify Functions (TypeScript)
    /api/scoreboard   -> ESPN NFL scoreboard (all games this week)
    /api/plays        -> current big-play list for each in-progress game
    /api/fantasy      -> my matchup + both rosters + live points
+   /api/odds         -> favorite's spread per game (only on "Update odds")
    |
    v
 ESPN site API (no auth)        ESPN fantasy API (cookies, server-side only)
@@ -178,6 +179,10 @@ Also define `Game`, `FantasyMatchup`, `FantasyTeam`, `RosterSlot`.
 - Add a simple access gate: functions require a secret key header that the page stores after a one-time prompt. Keeps strangers from burning through ESPN requests on my cookies.
 - As built: `src/server/api/access.ts` checks `X-Access-Key` against `ACCESS_KEY` (constant-time, fails closed when unset outside `netlify dev`). The page shows a key prompt on any 401 and keeps the key in localStorage. `npm run access-key` creates the key on Netlify as a secret; `npm run push-env` copies the league settings (cookies only with `--with-cookies`, since the league is public).
 - Production builds get a Content-Security-Policy `<meta>` tag (Vite's dev server needs inline scripts, so dev doesn't); `netlify.toml` adds `noindex`, `X-Frame-Options: DENY` and related headers.
+
+**Added 2026-11-10: point spreads.**
+- Each game card shows the favorite's spread (e.g. "NYG -2.5", or "PK"). Lines come from ESPN's scoreboard (currently DraftKings); Tom chose ESPN's lines over Pinnacle, whose odds need a paid or keyed source.
+- Odds are fetched only when the "Update odds" button is pressed (`/api/odds`, never cached), never by polling. The page remembers the last lines for the week in localStorage. ESPN drops a game's line at kickoff, so an update during games keeps each game's last known line.
 
 **Phase 5 (optional, later).**
 - Compute live fantasy points myself from box-score stats + league scoring settings, if ESPN's live number lags.

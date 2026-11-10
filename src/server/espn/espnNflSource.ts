@@ -1,9 +1,10 @@
 import type { BigPlayRules } from "../../shared/bigPlayRules.ts";
-import type { GamePlays, Scoreboard } from "../../shared/types.ts";
+import type { GamePlays, OddsResponse, Scoreboard } from "../../shared/types.ts";
 import { fetchJson } from "../http.ts";
 import type { NflDataSource, ScoreboardQuery } from "../sources.ts";
 import { detectBigPlays } from "./detectBigPlays.ts";
 import type { EspnCorePlayList, EspnScoreboard, EspnSummary } from "./espnTypes.ts";
+import { normalizeOdds } from "./normalizeOdds.ts";
 import { normalizeScoreboard } from "./normalizeScoreboard.ts";
 
 const SITE = "https://site.api.espn.com/apis/site/v2/sports/football/nfl";
@@ -12,11 +13,20 @@ const CORE_PAGE_SIZE = 400; // a whole game fits on one page
 
 export class EspnNflSource implements NflDataSource {
   async getScoreboard(query: ScoreboardQuery = {}): Promise<Scoreboard> {
+    return normalizeScoreboard(await this.rawScoreboard(query));
+  }
+
+  /** Same ESPN call as the scoreboard, read for its lines (DraftKings, via ESPN). */
+  async getOdds(query: ScoreboardQuery = {}): Promise<OddsResponse> {
+    return normalizeOdds(await this.rawScoreboard(query));
+  }
+
+  private rawScoreboard(query: ScoreboardQuery): Promise<EspnScoreboard> {
     const params = new URLSearchParams();
     if (query.week) params.set("week", String(query.week));
     if (query.seasonType) params.set("seasontype", String(query.seasonType));
     const qs = params.size ? `?${params}` : "";
-    return normalizeScoreboard(await fetchJson<EspnScoreboard>(`${SITE}/scoreboard${qs}`));
+    return fetchJson<EspnScoreboard>(`${SITE}/scoreboard${qs}`);
   }
 
   async getGamePlays(gameId: string, rules: BigPlayRules): Promise<GamePlays> {

@@ -1,5 +1,5 @@
 import type { BigPlayRules } from "../shared/bigPlayRules.ts";
-import type { ApiError, ApiErrorCode, FantasyMatchup, PlaysResponse, Scoreboard } from "../shared/types.ts";
+import type { ApiError, ApiErrorCode, FantasyMatchup, OddsResponse, PlaysResponse, Scoreboard } from "../shared/types.ts";
 import { getAccessKey, reportAccessDenied } from "./accessKey.ts";
 
 /** Where the page gets its data: the Netlify functions, or a recording in replay mode. */
@@ -7,10 +7,14 @@ export interface ClientSource {
   scoreboard(week?: number): Promise<Scoreboard>;
   plays(gameIds: string[], rules: BigPlayRules): Promise<PlaysResponse>;
   fantasy(): Promise<FantasyMatchup>;
+  /** Called only from the "Update odds" button. */
+  odds(week?: number): Promise<OddsResponse>;
   /** The current time as the data sees it (a replay runs on its own clock). */
   now(): number;
   /** Replay polls faster than real time; live uses the settings. */
   pollOverrideMs?: number;
+  /** Remember fetched odds across visits (live only, so a replay can't overwrite them). Default true. */
+  persistOdds?: boolean;
 }
 
 export class ApiFetchError extends Error {
@@ -61,5 +65,6 @@ export const liveSource: ClientSource = {
   scoreboard: (week) => getApi(week ? `/api/scoreboard?week=${week}&seasontype=2` : "/api/scoreboard"),
   plays: (gameIds, rules) => getApi(`/api/plays?events=${gameIds.join(",")}&${rulesQuery(rules)}`),
   fantasy: () => getApi("/api/fantasy"),
+  odds: (week) => getApi(week ? `/api/odds?week=${week}&seasontype=2` : "/api/odds"),
   now: () => Date.now(),
 };

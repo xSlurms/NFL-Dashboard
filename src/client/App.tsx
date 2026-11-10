@@ -12,6 +12,7 @@ import { Toasts, type Toast } from "./components/Toasts.tsx";
 import type { ReplayClock } from "./replaySource.ts";
 import { loadSettings, saveSettings, type Settings } from "./settings.ts";
 import { useDashboard, type Alert } from "./useDashboard.ts";
+import { useOdds } from "./useOdds.ts";
 
 export interface ReplayHandle {
   clock: ReplayClock;
@@ -68,6 +69,7 @@ function Dashboard({ source, settings, onSettings, replaying }: { source: Client
   );
 
   const state = useDashboard(source, settings, onAlerts);
+  const odds = useOdds(source);
   const dismiss = useCallback((id: string) => setToasts((current) => current.filter((t) => t.id !== id)), []);
 
   return (
@@ -83,7 +85,16 @@ function Dashboard({ source, settings, onSettings, replaying }: { source: Client
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="order-2 lg:order-1">
-          <ScoreboardPanel board={state.board} fantasy={state.fantasy} possession={state.possession} error={state.errors.scoreboard} />
+          <ScoreboardPanel
+            board={state.board}
+            fantasy={state.fantasy}
+            possession={state.possession}
+            error={state.errors.scoreboard}
+            odds={odds.odds}
+            oddsUpdating={odds.updating}
+            oddsError={odds.error}
+            onUpdateOdds={() => odds.update(state.board?.week)}
+          />
         </div>
         <div className="order-1 lg:order-2">
           <Matchup fantasy={state.fantasy} board={state.board} error={state.errors.fantasy} />

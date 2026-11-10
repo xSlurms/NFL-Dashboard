@@ -74,7 +74,17 @@ export interface EspnEvent {
       downDistanceText?: string;
       lastPlay?: { text?: string };
     };
+    /** Pre-game lines. ESPN drops them once the game starts. */
+    odds?: EspnOdds[];
   }[];
+}
+
+export interface EspnOdds {
+  provider?: { id?: string; name?: string };
+  details?: string; // the favorite's line, e.g. "NYG -2.5", or "EVEN"
+  spread?: number; // from the home team's side
+  homeTeamOdds?: { favorite?: boolean };
+  awayTeamOdds?: { favorite?: boolean };
 }
 
 export interface EspnScoreboard {

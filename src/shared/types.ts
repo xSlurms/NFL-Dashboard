@@ -74,6 +74,21 @@ export interface Scoreboard {
   byeTeamIds: string[];
 }
 
+// ---- /api/odds (fetched only when asked) ----
+
+export interface GameOdds {
+  gameId: string;
+  favoriteTeamId: string | null; // null for a pick'em
+  favorite: string | null; // abbreviation
+  spread: number; // the favorite's line, e.g. -2.5; 0 for a pick'em
+  provider: string; // e.g. "DraftKings"
+}
+
+export interface OddsResponse {
+  week: number;
+  games: GameOdds[]; // games with no line (started, final, or not posted yet) are left out
+}
+
 // ---- /api/plays ----
 
 export interface GamePlays {

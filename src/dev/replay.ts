@@ -3,10 +3,11 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import type { BigPlayRules } from "../shared/bigPlayRules.ts";
-import type { FantasyMatchup, PlaysResponse, Scoreboard } from "../shared/types.ts";
+import type { FantasyMatchup, OddsResponse, PlaysResponse, Scoreboard } from "../shared/types.ts";
 import { detectBigPlays } from "../server/espn/detectBigPlays.ts";
-import type { EspnCorePlayList, EspnFantasyLeague, EspnSummary } from "../server/espn/espnTypes.ts";
+import type { EspnCorePlayList, EspnFantasyLeague, EspnScoreboard, EspnSummary } from "../server/espn/espnTypes.ts";
 import { normalizeFantasy } from "../server/espn/normalizeFantasy.ts";
+import { normalizeOdds } from "../server/espn/normalizeOdds.ts";
 import { normalizeScoreboard } from "../server/espn/normalizeScoreboard.ts";
 
 const KINDS = ["summary", "core", "scoreboard", "fantasy"] as const;
@@ -103,10 +104,13 @@ export const replayMeta = (rec: Recording): ReplayMeta => ({
 const readGz = <T>(path: string): T => JSON.parse(gunzipSync(readFileSync(path)).toString("utf8"));
 const readPlain = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8"));
 
-export function replayScoreboard(rec: Recording, t: number): Scoreboard {
-  const snap = snapshotAt(rec.snapshots.scoreboard, t) ?? rec.snapshots.scoreboard[0];
-  return normalizeScoreboard(readGz(snap.path));
-}
+const rawScoreboardAt = (rec: Recording, t: number): EspnScoreboard =>
+  readGz((snapshotAt(rec.snapshots.scoreboard, t) ?? rec.snapshots.scoreboard[0]).path);
+
+export const replayScoreboard = (rec: Recording, t: number): Scoreboard => normalizeScoreboard(rawScoreboardAt(rec, t));
+
+/** The lines as ESPN showed them at time `t` in the recording. */
+export const replayOdds = (rec: Recording, t: number): OddsResponse => normalizeOdds(rawScoreboardAt(rec, t));
 
 /**
  * The recorded game is replayed from its snapshots. Other games that week are already final in the

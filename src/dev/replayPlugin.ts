@@ -3,7 +3,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { rulesFromQuery } from "../server/api/handlers.ts";
-import { ReplayError, openRecording, replayFantasy, replayMeta, replayPlays, replayScoreboard } from "./replay.ts";
+import { ReplayError, openRecording, replayFantasy, replayMeta, replayOdds, replayPlays, replayScoreboard } from "./replay.ts";
 
 export interface ReplayConfig {
   teamId: number;
@@ -37,6 +37,8 @@ function respond(req: IncomingMessage, res: ServerResponse, config: ReplayConfig
         return send(200, replayMeta(rec));
       case "/scoreboard":
         return send(200, replayScoreboard(rec, t));
+      case "/odds":
+        return send(200, replayOdds(rec, t));
       case "/plays": {
         const events = (url.searchParams.get("events") ?? rec.gameId).split(",").filter((id) => /^\d{1,12}$/.test(id));
         return send(200, replayPlays(rec, t, events, rulesFromQuery(url)));

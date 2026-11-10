@@ -74,6 +74,8 @@ export async function createReplay(dir: string, team: string | null): Promise<{ 
     scoreboard: () => getApi(q("scoreboard")),
     plays: (gameIds, rules) => getApi(q("plays", `&events=${gameIds.join(",")}&${rulesQuery(rules)}`)),
     fantasy: () => getApi(q("fantasy", teamParam)),
+    odds: () => getApi(q("odds")),
+    persistOdds: false,
     now: () => clock.now(),
     pollOverrideMs: 2_000,
   };

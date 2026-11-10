@@ -22,6 +22,19 @@ export async function handleScoreboard(req: Request, nfl: NflDataSource): Promis
   }
 }
 
+/** GET /api/odds: the page calls this only when the "Update odds" button is pressed, so it's never cached. */
+export async function handleOdds(req: Request, nfl: NflDataSource): Promise<Response> {
+  if (req.method !== "GET") return methodNotAllowed();
+  const url = new URL(req.url);
+  try {
+    const week = intParam(url, "week", 1, 25);
+    const seasonType = intParam(url, "seasontype", 1, 4);
+    return json(await nfl.getOdds({ week, seasonType }), 200, { "Cache-Control": "no-store" });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 /**
  * GET /api/plays: current big plays for each game asked for, or for every in-progress game when no
  * `events` are given. The browser diffs the result against what it has shown, so new, corrected and
