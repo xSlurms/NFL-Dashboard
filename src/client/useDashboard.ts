@@ -4,8 +4,8 @@ import { fantasyOwnerOf } from "../shared/fantasyOwner.ts";
 import type { BigPlay, FantasyMatchup, Scoreboard } from "../shared/types.ts";
 import { ApiFetchError, type ClientSource } from "./api.ts";
 import { emptyStore, mergePlays, type PlayStore } from "./playStore.ts";
-import { emptyWatch, gamesToFetch, markFetched, pollDelay, rememberPossession } from "./schedule.ts";
-import type { Settings } from "./settings.ts";
+import { IDLE_POLL_MS, backgroundDelay, emptyWatch, gamesToFetch, markFetched, matchupIsLive, pollDelay, rememberPossession } from "./schedule.ts";
+import { activeTeamOf, type Settings } from "./settings.ts";
 
 export interface Alert {
   kind: "big-play" | "overturned";
@@ -40,15 +40,34 @@ export function useDashboard(source: ClientSource, settings: Settings, onAlerts:
   const [state, setState] = useState(initialState);
   const alertsRef = useRef(onAlerts);
   alertsRef.current = onAlerts;
+  // Read when scheduling, so turning notifications on or off doesn't restart the loop.
+  const backgroundAlertsRef = useRef(false);
+  backgroundAlertsRef.current = settings.notifications || settings.sound;
+  const team = activeTeamOf(settings);
   const rulesKey = JSON.stringify(settings.rules);
+  const teamKey = JSON.stringify(team);
+
+  // Kept across restarts of the loop, so switching tabs doesn't reload the scores or the ticker.
+  const memory = useRef({ state: initialState(), store: emptyStore(), watch: emptyWatch(), rulesKey, teamKey, fantasyAt: 0 });
 
   useEffect(() => {
-    // New rules mean a new set of big plays: start over, and don't alert on the reseed.
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let store = emptyStore();
-    let watch = emptyWatch();
-    let current = initialState();
+    const m = memory.current;
+    // New rules mean a new set of big plays: start over, and don't alert on the reseed.
+    if (m.rulesKey !== rulesKey) {
+      m.store = emptyStore();
+      m.watch = emptyWatch();
+      m.rulesKey = rulesKey;
+    }
+    // A different team: drop the old matchup so it isn't shown under the new tab.
+    let current: DashboardState = { ...m.state, store: m.store };
+    if (m.teamKey !== teamKey) {
+      current = { ...current, fantasy: null, errors: { ...current.errors, fantasy: null } };
+      m.teamKey = teamKey;
+    }
+    let store = m.store;
+    let watch = m.watch;
     const rules = settings.rules;
     setState(current);
 
@@ -56,10 +75,26 @@ export function useDashboard(source: ClientSource, settings: Settings, onAlerts:
       const now = source.now();
       const next: DashboardState = { ...current, errors: { scoreboard: null, fantasy: null, plays: [] } };
 
-      try {
-        next.fantasy = await source.fantasy();
-      } catch (error) {
-        next.errors.fantasy = asApiError(error);
+      // Fantasy: nothing to ask for without a team. With one, poll at the live rate only while one of the
+      // matchup's games can change the points; otherwise every few minutes.
+      const fantasyDue =
+        !current.fantasy ||
+        matchupIsLive(current.board?.games ?? [], current.fantasy, watch, now) ||
+        Date.now() - m.fantasyAt >= IDLE_POLL_MS;
+      if (!team && !source.servesDefaultTeam) {
+        next.fantasy = null;
+        next.errors.fantasy = new ApiFetchError(0, "no_team", "No team chosen yet.");
+      } else if (fantasyDue) {
+        try {
+          next.fantasy = await source.fantasy(team);
+          m.fantasyAt = Date.now();
+        } catch (error) {
+          next.errors.fantasy = asApiError(error);
+          // Don't keep showing the old team's matchup when the problem is the team itself.
+          if (["no_team", "bad_request"].includes(next.errors.fantasy.code)) next.fantasy = null;
+        }
+      } else {
+        next.errors.fantasy = current.errors.fantasy;
       }
       if (cancelled) return;
 
@@ -95,20 +130,55 @@ export function useDashboard(source: ClientSource, settings: Settings, onAlerts:
       }
       if (cancelled) return;
 
-      const delay = source.pollOverrideMs ?? pollDelay(games, watch, now, settings.pollSeconds * 1000);
-      current = { ...next, store, updatedAt: Date.now(), nextPollAt: Date.now() + delay };
+      visibleDelay = source.pollOverrideMs ?? pollDelay(games, watch, now, settings.pollSeconds * 1000);
+      current = { ...next, store, updatedAt: Date.now(), nextPollAt: Date.now() + visibleDelay };
+      Object.assign(m, { state: current, store, watch });
       setState(current);
       if (alerts.length) alertsRef.current(alerts);
-      timer = setTimeout(cycle, delay);
     };
 
-    cycle();
+    // A hidden tab refreshes once a minute if it has alerts to deliver, otherwise not at all; showing
+    // the tab again refreshes at once and goes back to the normal rate.
+    let running = false;
+    let paused = false;
+    let nextAt = 0;
+    let visibleDelay = 0;
+    const isHidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+
+    const schedule = () => {
+      clearTimeout(timer);
+      const wait = backgroundDelay(visibleDelay, isHidden(), backgroundAlertsRef.current);
+      paused = wait === null;
+      if (wait === null) return;
+      nextAt = Date.now() + wait;
+      timer = setTimeout(run, wait);
+    };
+
+    const run = async () => {
+      if (running) return;
+      running = true;
+      try {
+        await cycle();
+      } finally {
+        running = false;
+      }
+      if (!cancelled) schedule();
+    };
+
+    const onVisibility = () => {
+      if (isHidden() || running) return;
+      if (paused || nextAt - Date.now() > visibleDelay) void run();
+    };
+
+    void run();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-    // rulesKey stands in for settings.rules, so editing the same values doesn't restart the loop.
-  }, [source, rulesKey, settings.pollSeconds]);
+    // The keys stand in for settings.rules and the active team, so saving the same values doesn't restart the loop.
+  }, [source, rulesKey, teamKey, settings.pollSeconds]);
 
   return state;
 }

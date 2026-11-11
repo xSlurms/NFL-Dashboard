@@ -35,9 +35,11 @@ export interface ReplayMeta {
 
 export class ReplayError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly code: "no_team" | null;
+  constructor(status: number, message: string, code: "no_team" | null = null) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -141,10 +143,10 @@ export function replayPlays(rec: Recording, t: number, gameIds: string[], rules:
   return body;
 }
 
-export function replayFantasy(rec: Recording, t: number, teamId: number, leagueId: string): FantasyMatchup {
+export function replayFantasy(rec: Recording, t: number, teamId: number): FantasyMatchup {
   const list = rec.snapshots.fantasy;
   if (list.length === 0) throw new ReplayError(404, `${rec.dir} has no fantasy snapshots`);
-  const raw = readGz<EspnFantasyLeague>((snapshotAt(list, t) ?? list[0]).path);
+  const raw = readGz<EspnFantasyLeague & { id?: number }>((snapshotAt(list, t) ?? list[0]).path);
   const week = raw.scoringPeriodId ?? 1;
-  return normalizeFantasy(raw, { leagueId, teamId, week, matchupPeriod: raw.status?.currentMatchupPeriod ?? week });
+  return normalizeFantasy(raw, { leagueId: String(raw.id ?? ""), teamId, week, matchupPeriod: raw.status?.currentMatchupPeriod ?? week });
 }

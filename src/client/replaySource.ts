@@ -66,14 +66,17 @@ export class ReplayClock {
 }
 
 export async function createReplay(dir: string, team: string | null): Promise<{ source: ClientSource; clock: ReplayClock; meta: ReplayMeta }> {
-  const teamParam = team && /^\d{1,3}$/.test(team) ? `&team=${team}` : "";
+  // The selected tab's team, or &team= from the page address. Replays only have one league's data.
+  const urlTeam = team && /^\d{1,3}$/.test(team) ? team : null;
+  const teamParam = (saved: { teamId: number } | null | undefined) => (saved ? `&team=${saved.teamId}` : urlTeam ? `&team=${urlTeam}` : "");
   const q = (path: string, extra = "") => `/__replay/${path}?dir=${encodeURIComponent(dir)}&t=${Math.round(clock.now())}${extra}`;
   const meta = await getApi<ReplayMeta>(`/__replay/meta?dir=${encodeURIComponent(dir)}`);
   const clock = new ReplayClock(Date.parse(meta.start), Date.parse(meta.end));
   const source: ClientSource = {
     scoreboard: () => getApi(q("scoreboard")),
     plays: (gameIds, rules) => getApi(q("plays", `&events=${gameIds.join(",")}&${rulesQuery(rules)}`)),
-    fantasy: () => getApi(q("fantasy", teamParam)),
+    fantasy: (saved) => getApi(q("fantasy", teamParam(saved))),
+    servesDefaultTeam: urlTeam !== null,
     odds: () => getApi(q("odds")),
     persistOdds: false,
     now: () => clock.now(),

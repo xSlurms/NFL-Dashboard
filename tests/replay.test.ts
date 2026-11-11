@@ -58,8 +58,9 @@ describe.skipIf(!hasLive)("replaying Monday night", () => {
   });
 
   it("replays the fantasy matchup for any team in the league", () => {
-    const end = replayFantasy(rec, rec.end, 4, "338094");
+    const end = replayFantasy(rec, rec.end, 4);
+    expect(end.leagueId).toBe("338094"); // read from the recording itself
     expect([end.me.totalPoints, end.opponent?.totalPoints]).toEqual([131, 78]);
-    expect(replayFantasy(rec, rec.end, 20, "338094").me.teamId).toBe(20);
+    expect(replayFantasy(rec, rec.end, 20).me.teamId).toBe(20);
   });
 });

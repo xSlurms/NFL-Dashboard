@@ -47,8 +47,8 @@ function normalizeTeam(raw: EspnFantasyLeague, teamId: number, side: EspnFantasy
   const bench = roster.filter((r) => r.slot === "BE" || r.slot === "IR").sort((a, b) => (a.slot === b.slot ? 0 : a.slot === "BE" ? -1 : 1));
   return {
     teamId,
-    name: info?.name ?? `Team ${teamId}`,
-    abbrev: info?.abbrev ?? "",
+    name: info?.name?.trim() || `Team ${teamId}`,
+    abbrev: info?.abbrev?.trim() ?? "",
     logo: info?.logo ?? null,
     totalPoints: round(side?.totalPointsLive ?? side?.totalPoints ?? 0),
     projectedPoints: nullableRound(side?.totalProjectedPointsLive ?? side?.totalProjectedPoints),

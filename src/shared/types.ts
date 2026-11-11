@@ -140,7 +140,7 @@ export interface FantasyMatchup {
 
 // ---- errors from any endpoint ----
 
-export type ApiErrorCode = "bad_request" | "method_not_allowed" | "unauthorized" | "config" | "espn_auth" | "upstream";
+export type ApiErrorCode = "bad_request" | "method_not_allowed" | "unauthorized" | "no_team" | "config" | "espn_auth" | "upstream";
 
 export interface ApiError {
   error: { code: ApiErrorCode; message: string };

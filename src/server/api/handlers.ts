@@ -1,6 +1,7 @@
 // Request handling for the three endpoints, kept free of Netlify specifics so tests can call it directly.
 import { DEFAULT_RULES, type BigPlayRules } from "../../shared/bigPlayRules.ts";
 import type { ApiError, ApiErrorCode, PlaysResponse } from "../../shared/types.ts";
+import { FantasyConfigError } from "../espn/espnFantasySource.ts";
 import { UpstreamError } from "../http.ts";
 import { FantasyAuthError, type FantasySource, type NflDataSource } from "../sources.ts";
 
@@ -61,18 +62,25 @@ export async function handlePlays(req: Request, nfl: NflDataSource): Promise<Res
   }
 }
 
-/** `connect` builds the source from the environment, so a missing variable becomes a clear "config" error. */
-export async function handleFantasy(req: Request, connect: () => FantasySource): Promise<Response> {
+/**
+ * GET /api/fantasy?leagueId=&teamId=[&season=], plus X-Espn-S2 / X-Espn-Swid for a private league.
+ * `connect` builds the source from the request, so a bad or missing team becomes a clear error.
+ */
+export async function handleFantasy(req: Request, connect: (query: URLSearchParams, headers: Headers) => FantasySource): Promise<Response> {
   if (req.method !== "GET") return methodNotAllowed();
   let source: FantasySource;
   try {
-    source = connect();
+    source = connect(new URL(req.url).searchParams, req.headers);
   } catch (error) {
+    if (error instanceof FantasyConfigError) return apiError(error.code, error.message, error.code === "bad_request" ? 400 : 404);
     return apiError("config", safeMessage(error), 500);
   }
   try {
     // Never on the CDN: fantasy responses stay between this function and the browser.
-    return json(await source.getMatchup(), 200, { "Cache-Control": `private, max-age=${LIVE_CACHE_SECONDS}` });
+    return json(await source.getMatchup(), 200, {
+      "Cache-Control": `private, max-age=${LIVE_CACHE_SECONDS}`,
+      Vary: "X-Access-Key, X-Espn-S2, X-Espn-Swid",
+    });
   } catch (error) {
     return errorResponse(error);
   }

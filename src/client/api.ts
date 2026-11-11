@@ -1,12 +1,16 @@
 import type { BigPlayRules } from "../shared/bigPlayRules.ts";
 import type { ApiError, ApiErrorCode, FantasyMatchup, OddsResponse, PlaysResponse, Scoreboard } from "../shared/types.ts";
 import { getAccessKey, reportAccessDenied } from "./accessKey.ts";
+import { teamHeaders, teamQuery, type SavedTeam, type TeamChoice } from "./teamUrl.ts";
 
 /** Where the page gets its data: the Netlify functions, or a recording in replay mode. */
 export interface ClientSource {
   scoreboard(week?: number): Promise<Scoreboard>;
   plays(gameIds: string[], rules: BigPlayRules): Promise<PlaysResponse>;
-  fantasy(): Promise<FantasyMatchup>;
+  /** The selected tab's team, with its cookies if private. */
+  fantasy(team?: TeamChoice | SavedTeam | null): Promise<FantasyMatchup>;
+  /** True only for a replay started with &team=: everywhere else there is no team until one is added. */
+  servesDefaultTeam?: boolean;
   /** Called only from the "Update odds" button. */
   odds(week?: number): Promise<OddsResponse>;
   /** The current time as the data sees it (a replay runs on its own clock). */
@@ -37,8 +41,8 @@ export function rulesQuery(rules: BigPlayRules): string {
   }).toString();
 }
 
-export async function getApi<T>(path: string): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+export async function getApi<T>(path: string, extraHeaders: Record<string, string> = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
   const key = getAccessKey();
   if (key) headers["X-Access-Key"] = key;
   let res: Response;
@@ -64,7 +68,7 @@ export async function getApi<T>(path: string): Promise<T> {
 export const liveSource: ClientSource = {
   scoreboard: (week) => getApi(week ? `/api/scoreboard?week=${week}&seasontype=2` : "/api/scoreboard"),
   plays: (gameIds, rules) => getApi(`/api/plays?events=${gameIds.join(",")}&${rulesQuery(rules)}`),
-  fantasy: () => getApi("/api/fantasy"),
+  fantasy: (team) => getApi(`/api/fantasy${teamQuery(team)}`, teamHeaders(team)),
   odds: (week) => getApi(week ? `/api/odds?week=${week}&seasontype=2` : "/api/odds"),
   now: () => Date.now(),
 };

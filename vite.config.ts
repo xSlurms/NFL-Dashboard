@@ -1,6 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { replayPlugin } from "./src/dev/replayPlugin.ts";
 
 // The page may only run its own scripts and talk to its own functions. img-src allows any https
@@ -26,16 +26,7 @@ const contentSecurityPolicy = (): Plugin => ({
   ],
 });
 
-export default defineConfig(({ mode }) => {
-  // Server-side only: none of these reach the browser (no VITE_ prefix).
-  const env = loadEnv(mode, process.cwd(), "");
-  return {
-    plugins: [
-      react(),
-      tailwindcss(),
-      contentSecurityPolicy(),
-      replayPlugin({ teamId: Number(env.TEAM_ID), leagueId: env.LEAGUE_ID ?? "" }),
-    ],
-    build: { outDir: "dist", emptyOutDir: true },
-  };
+export default defineConfig({
+  plugins: [react(), tailwindcss(), contentSecurityPolicy(), replayPlugin()],
+  build: { outDir: "dist", emptyOutDir: true },
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FINAL_SWEEP_MS, IDLE_POLL_MS, emptyWatch, gamesToFetch, markFetched, pollDelay, rememberPossession } from "../src/client/schedule.ts";
+import { FINAL_SWEEP_MS, HIDDEN_POLL_MS, IDLE_POLL_MS, backgroundDelay, emptyWatch, gamesToFetch, markFetched, matchupIsLive, pollDelay, rememberPossession } from "../src/client/schedule.ts";
 import type { Game, GameState } from "../src/shared/types.ts";
 
 const team = (id: string) => ({ id, abbreviation: id, name: id, score: 0, logo: "", record: null });
@@ -49,6 +49,46 @@ describe("pollDelay", () => {
   it("slows to 5 minutes otherwise", () => {
     expect(pollDelay([game("g", "pre"), game("h", "post")], emptyWatch(), now, 15_000)).toBe(IDLE_POLL_MS);
     expect(pollDelay([], emptyWatch(), now, 15_000)).toBe(IDLE_POLL_MS);
+  });
+});
+
+describe("backgroundDelay", () => {
+  it("leaves a visible tab alone", () => {
+    expect(backgroundDelay(15_000, false, false)).toBe(15_000);
+    expect(backgroundDelay(15_000, false, true)).toBe(15_000);
+  });
+
+  it("slows a hidden tab to once a minute when it has alerts to deliver", () => {
+    expect(backgroundDelay(15_000, true, true)).toBe(HIDDEN_POLL_MS);
+    expect(backgroundDelay(IDLE_POLL_MS, true, true)).toBe(IDLE_POLL_MS); // never faster than it already was
+  });
+
+  it("pauses a hidden tab with no alerts on", () => {
+    expect(backgroundDelay(15_000, true, false)).toBeNull();
+  });
+});
+
+describe("matchupIsLive", () => {
+  const now = Date.parse("2026-11-15T17:00:00Z");
+  const slot = (proTeamId: string) => ({ slot: "WR" as const, espnId: "1", name: "", position: "WR", proTeamId, proTeam: "", points: 0, projectedPoints: null });
+  const side = (...teams: string[]) => ({ teamId: 1, name: "", abbrev: "", logo: null, totalPoints: 0, projectedPoints: null, winProbability: null, starters: teams.map(slot), bench: [] });
+  const matchup = { leagueId: "1", season: 2026, week: 10, me: side("aa"), opponent: side("bh") };
+  // game("a") has teams "ah" (home) and "aa" (away); game("b") has "bh" and "ba".
+
+  it("is live when a game with my or my opponent's starter is on, about to start, or just ended", () => {
+    expect(matchupIsLive([game("a", "in")], matchup, emptyWatch(), now)).toBe(true);
+    expect(matchupIsLive([game("b", "in")], matchup, emptyWatch(), now)).toBe(true); // opponent's starter
+    expect(matchupIsLive([game("a", "pre", { startTime: "2026-11-15T17:05:00Z" })], matchup, emptyWatch(), now)).toBe(true);
+    const sweeping = { ...emptyWatch(), sweepUntil: new Map([["a", now + 1000]]) };
+    expect(matchupIsLive([game("a", "post")], matchup, sweeping, now)).toBe(true);
+  });
+
+  it("is not live when only other teams are playing", () => {
+    expect(matchupIsLive([game("c", "in"), game("a", "post"), game("b", "pre")], matchup, emptyWatch(), now)).toBe(false);
+  });
+
+  it("counts as live before the matchup has loaded, so it gets fetched", () => {
+    expect(matchupIsLive([], null, emptyWatch(), now)).toBe(true);
   });
 });
 

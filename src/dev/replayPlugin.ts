@@ -5,22 +5,17 @@ import type { Plugin } from "vite";
 import { rulesFromQuery } from "../server/api/handlers.ts";
 import { ReplayError, openRecording, replayFantasy, replayMeta, replayOdds, replayPlays, replayScoreboard } from "./replay.ts";
 
-export interface ReplayConfig {
-  teamId: number;
-  leagueId: string;
-}
-
-export function replayPlugin(config: ReplayConfig): Plugin {
+export function replayPlugin(): Plugin {
   return {
     name: "football-replay",
     apply: "serve",
     configureServer(server) {
-      server.middlewares.use("/__replay", (req, res) => respond(req, res, config));
+      server.middlewares.use("/__replay", (req, res) => respond(req, res));
     },
   };
 }
 
-function respond(req: IncomingMessage, res: ServerResponse, config: ReplayConfig) {
+function respond(req: IncomingMessage, res: ServerResponse) {
   const send = (status: number, body: unknown) => {
     res.statusCode = status;
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -44,16 +39,19 @@ function respond(req: IncomingMessage, res: ServerResponse, config: ReplayConfig
         return send(200, replayPlays(rec, t, events, rulesFromQuery(url)));
       }
       case "/fantasy": {
-        // ?team= replays the recording as another team in the league, e.g. to see alerts fire.
-        const teamId = Number(url.searchParams.get("team") || config.teamId);
-        if (!Number.isInteger(teamId) || teamId <= 0) throw new ReplayError(500, "TEAM_ID is not set in .env");
-        return send(200, replayFantasy(rec, t, teamId, config.leagueId));
+        // The selected tab's team, or ?team= from the page address. No default, as on the live site.
+        const raw = url.searchParams.get("team");
+        if (!raw) throw new ReplayError(404, "No team chosen yet. Add a team (or add &team=<id> to the address).", "no_team");
+        const teamId = Number(raw);
+        if (!Number.isInteger(teamId) || teamId <= 0) throw new ReplayError(400, "team must be a fantasy team number");
+        return send(200, replayFantasy(rec, t, teamId));
       }
       default:
         throw new ReplayError(404, "Unknown replay endpoint");
     }
   } catch (error) {
     const status = error instanceof ReplayError ? error.status : 500;
-    send(status, { error: { code: status === 400 ? "bad_request" : "upstream", message: (error as Error).message } });
+    const code = error instanceof ReplayError && error.code ? error.code : status === 400 ? "bad_request" : "upstream";
+    send(status, { error: { code, message: (error as Error).message } });
   }
 }

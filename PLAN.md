@@ -119,7 +119,14 @@ Single page, three zones. Dark theme, readable on a laptop and a phone.
 - Optional browser notification (ask permission once, setting to turn off)
 - Optional sound, off by default
 
-**Settings panel.** Big-play thresholds, fumble/FG flags, poll interval. Store in localStorage (wrapped in try/catch). League ID, team ID and season are shown read-only: they come from environment variables so the browser can't point my cookies at another league. Cookies are not entered here; they live in Netlify environment variables.
+**Settings panel.** Big-play thresholds, fumble/FG flags, poll interval. Store in localStorage (wrapped in try/catch). Cookies are not entered here; they live in Netlify environment variables.
+
+**Multiple teams (added 2026-11-10, Tom's request).** ESPN only for now.
+- "Add a team" takes a pasted ESPN team link (`fantasy.espn.com/football/team?leagueId=…&teamId=…`), checks it with ESPN, and adds a tab named after the team. The matchup panel has one tab per team; only the selected tab is polled, and switching keeps the scores and ticker. Gold/red borders and alerts follow the selected team.
+- **No default team anywhere** (Tom, 2026-11-10): the page starts with "Add a team", and the functions read no team or cookies from the environment. Built to be shared: each person adds their own teams.
+- **Private leagues:** a "Private league" switch shows masked `espn_s2` and `SWID` fields, each with a "?" explaining where to find them. Tom accepted the trade-off: these cookies are saved in that browser's localStorage, sent to the fantasy function only in `X-Espn-S2` / `X-Espn-Swid` headers (never in a URL), checked for format (nothing that could break a Cookie header), used only for the league in that same request, and never logged or returned.
+- **Usage:** no fantasy calls until a team is added; the matchup refreshes at the live rate only while a game with one of its starters is on, about to start, or just ended (otherwise every 5 minutes); the server remembers each league's current week for 10 minutes, so a refresh is one ESPN call. A hidden tab refreshes once a minute if notifications or sound are on, otherwise it pauses, and refreshes at once when shown. (Not built, by choice: merging scores and plays into one shared cached call; Tom's Netlify free plan gives 300 credits/month at 2 credits per 10,000 requests, so requests aren't the constraint.)
+- Teams are managed in Settings (edit, e.g. to refresh expired cookies, or remove).
 
 ## 8. Core types (`src/shared/types.ts`)
 
@@ -201,7 +208,7 @@ Also define `Game`, `FantasyMatchup`, `FantasyTeam`, `RosterSlot`.
 - **Unofficial APIs.** ESPN can change or block endpoints without notice. The adapter layer and fixtures limit the damage. Don't poll faster than every 10-15s.
 - **ESPN cookies expire.** When fantasy calls start returning 401/empty data, show a clear "refresh ESPN cookies" message instead of a blank panel.
 - **Play corrections.** ESPN edits plays after the fact (yardage, penalties, reviews). The detector must re-check recent plays, not just new ones.
-- **Cookie security.** `espn_s2` is a full ESPN session. Never log it, never send it to the browser, never commit it.
+- **Cookie security.** `espn_s2` is a full ESPN session. Never log it, never commit it, never put it in a URL. The server never sends it to the browser; a private league's cookies are entered in the browser by the user and stay there (see "Multiple teams").
 
 ## 12. How Claude Code should work on this
 

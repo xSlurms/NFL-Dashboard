@@ -3,16 +3,19 @@ import type { BigPlayRules } from "../../shared/bigPlayRules.ts";
 import type { FantasyMatchup } from "../../shared/types.ts";
 import { clearAccessKey, getAccessKey } from "../accessKey.ts";
 import { notificationsSupported, playChime, requestNotificationPermission, unlockSound } from "../alerts.ts";
-import { DEFAULT_SETTINGS, POLL_CHOICES, type Settings } from "../settings.ts";
+import { DEFAULT_SETTINGS, POLL_CHOICES, removeTeam, type Settings } from "../settings.ts";
+import { teamLabel, type SavedTeam } from "../teamUrl.ts";
 
 interface Props {
   settings: Settings;
   fantasy: FantasyMatchup | null;
   onChange: (settings: Settings) => void;
   onClose: () => void;
+  onAddTeam: () => void;
+  onEditTeam: (team: SavedTeam) => void;
 }
 
-export function SettingsPanel({ settings, fantasy, onChange, onClose }: Props) {
+export function SettingsPanel({ settings, fantasy, onChange, onClose, onAddTeam, onEditTeam }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const setRules = (rules: Partial<BigPlayRules>) => onChange({ ...settings, rules: { ...settings.rules, ...rules } });
@@ -100,8 +103,11 @@ export function SettingsPanel({ settings, fantasy, onChange, onClose }: Props) {
           {notice && <p className="text-xs text-amber-400">{notice}</p>}
         </Section>
 
-        <Section title="League">
-          <p className="text-xs text-zinc-500">Set on the server, so this page can't be pointed at another league.</p>
+        <Section title="My teams">
+          <TeamList settings={settings} onChange={onChange} onAdd={onAddTeam} onEdit={onEditTeam} />
+        </Section>
+
+        <Section title="Showing now">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-zinc-400">League</dt>
             <dd>{fantasy?.leagueId ?? "–"}</dd>
@@ -126,7 +132,7 @@ export function SettingsPanel({ settings, fantasy, onChange, onClose }: Props) {
 
         <button
           type="button"
-          onClick={() => onChange({ ...DEFAULT_SETTINGS, tickerFilter: settings.tickerFilter })}
+          onClick={() => onChange({ ...DEFAULT_SETTINGS, tickerFilter: settings.tickerFilter, teams: settings.teams, activeTeam: settings.activeTeam })}
           className="mt-2 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
         >
           Reset to defaults
@@ -160,6 +166,46 @@ function Check({ label, checked, onChange }: { label: string; checked: boolean; 
       <span>{label}</span>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-amber-400" />
     </label>
+  );
+}
+
+/** The saved teams (the tabs), with edit and remove. */
+function TeamList({ settings, onChange, onAdd, onEdit }: { settings: Settings; onChange: (s: Settings) => void; onAdd: () => void; onEdit: (team: SavedTeam) => void }) {
+  return (
+    <div className="space-y-2">
+      {settings.teams.length === 0 ? (
+        <p className="text-xs text-zinc-500">No teams yet. Add one from its ESPN team link; add more to switch between them with tabs.</p>
+      ) : (
+        <ul className="divide-y divide-zinc-800 rounded-lg border border-zinc-800">
+          {settings.teams.map((team) => (
+            <li key={team.key} className="flex items-center gap-2 px-3 py-2 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="truncate">{teamLabel(team)}</p>
+                <p className="text-xs text-zinc-500">
+                  League {team.leagueId} · team {team.teamId}
+                  {team.season ? ` · ${team.season}` : ""}
+                  {team.espnS2 ? " · private, cookies saved" : " · public"}
+                </p>
+              </div>
+              <button type="button" onClick={() => onEdit(team)} className="text-xs text-zinc-300 underline hover:text-white">
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(removeTeam(settings, team.key))}
+                aria-label={`Remove ${teamLabel(team)}`}
+                className="text-xs text-red-300 underline hover:text-red-200"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" onClick={onAdd} className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800">
+        + Add a team
+      </button>
+    </div>
   );
 }
 

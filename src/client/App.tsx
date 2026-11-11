@@ -10,7 +10,10 @@ import { SettingsPanel } from "./components/SettingsPanel.tsx";
 import { Ticker } from "./components/Ticker.tsx";
 import { Toasts, type Toast } from "./components/Toasts.tsx";
 import type { ReplayClock } from "./replaySource.ts";
-import { loadSettings, saveSettings, type Settings } from "./settings.ts";
+import { activeTeamOf, loadSettings, nameTeam, saveSettings, saveTeam, type Settings } from "./settings.ts";
+import type { SavedTeam } from "./teamUrl.ts";
+import { TeamDialog } from "./components/TeamDialog.tsx";
+import { TeamTabs } from "./components/TeamTabs.tsx";
 import { useDashboard, type Alert } from "./useDashboard.ts";
 import { useOdds } from "./useOdds.ts";
 
@@ -72,6 +75,29 @@ function Dashboard({ source, settings, onSettings, replaying }: { source: Client
   const odds = useOdds(source);
   const dismiss = useCallback((id: string) => setToasts((current) => current.filter((t) => t.id !== id)), []);
 
+  // ---- fantasy teams ----
+  const [teamDialog, setTeamDialog] = useState<{ editing: SavedTeam | null } | null>(null);
+  const activeTeam = activeTeamOf(settings);
+  const fantasy = state.fantasy;
+
+  // Tabs show the team's ESPN name once it has loaded.
+  useEffect(() => {
+    if (!fantasy || !activeTeam) return;
+    if (fantasy.leagueId === activeTeam.leagueId && fantasy.me.teamId === activeTeam.teamId) {
+      const next = nameTeam(settings, activeTeam.key, fantasy.me.name);
+      if (next !== settings) onSettings(next);
+    }
+  }, [fantasy, activeTeam, settings, onSettings]);
+
+  const tabs = (
+    <TeamTabs
+      teams={settings.teams}
+      activeKey={activeTeam?.key ?? null}
+      onSelect={(activeTeam) => onSettings({ ...settings, activeTeam })}
+      onAdd={() => setTeamDialog({ editing: null })}
+    />
+  );
+
   return (
     <div className={`mx-auto max-w-7xl px-4 pt-3 ${replaying ? "pb-28" : "pb-8"}`}>
       <Header state={state} onOpenSettings={() => setSettingsOpen(true)} />
@@ -83,7 +109,8 @@ function Dashboard({ source, settings, onSettings, replaying }: { source: Client
         onFilter={(tickerFilter) => onSettings({ ...settings, tickerFilter })}
         error={state.errors.plays}
       />
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      {/* minmax(0,1fr) on phones too, so a long tab strip scrolls inside its panel instead of widening the page. */}
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="order-2 lg:order-1">
           <ScoreboardPanel
             board={state.board}
@@ -97,11 +124,38 @@ function Dashboard({ source, settings, onSettings, replaying }: { source: Client
           />
         </div>
         <div className="order-1 lg:order-2">
-          <Matchup fantasy={state.fantasy} board={state.board} error={state.errors.fantasy} />
+          <Matchup
+            fantasy={state.fantasy}
+            board={state.board}
+            error={state.errors.fantasy}
+            tabs={tabs}
+            onAddTeam={() => setTeamDialog({ editing: null })}
+            onEditTeam={activeTeam ? () => setTeamDialog({ editing: activeTeam }) : null}
+          />
         </div>
       </div>
       <Toasts toasts={toasts} onDismiss={dismiss} aboveBar={replaying} />
-      {settingsOpen && <SettingsPanel settings={settings} fantasy={state.fantasy} onChange={onSettings} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          fantasy={state.fantasy}
+          onChange={onSettings}
+          onClose={() => setSettingsOpen(false)}
+          onAddTeam={() => setTeamDialog({ editing: null })}
+          onEditTeam={(team) => setTeamDialog({ editing: team })}
+        />
+      )}
+      {teamDialog && (
+        <TeamDialog
+          editing={teamDialog.editing}
+          verify={(team) => source.fantasy(team)}
+          onSave={(team) => {
+            onSettings(saveTeam(settings, team));
+            setTeamDialog(null);
+          }}
+          onClose={() => setTeamDialog(null)}
+        />
+      )}
     </div>
   );
 }

@@ -8,13 +8,31 @@ interface Props {
   fantasy: FantasyMatchup | null;
   board: Scoreboard | null;
   error: ApiFetchError | null;
+  /** The team tabs, drawn at the top of the panel. */
+  tabs: React.ReactNode;
+  onAddTeam: () => void;
+  /** Opens the selected team for editing (e.g. to add or refresh cookies); null when no team is saved. */
+  onEditTeam: (() => void) | null;
 }
 
-export function Matchup({ fantasy, board, error }: Props) {
+export function Matchup({ fantasy, board, error, tabs, onAddTeam, onEditTeam }: Props) {
   if (!fantasy) {
+    const needsTeam = error?.code === "no_team" || error?.code === "bad_request";
     return (
       <Panel title="My matchup">
-        {error ? <FantasyError error={error} /> : <p className="py-6 text-center text-sm text-zinc-500">Loading matchup…</p>}
+        {tabs}
+        {needsTeam ? (
+          <div className="py-4 text-center text-sm">
+            <p className="text-zinc-300">{error.code === "no_team" ? "Add your fantasy team to see your matchup." : `That team didn't work: ${error.message}`}</p>
+            <button type="button" onClick={onEditTeam ?? onAddTeam} className="mt-3 rounded-md bg-amber-400 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-300">
+              {onEditTeam && error.code !== "no_team" ? "Edit this team" : "Add a team"}
+            </button>
+          </div>
+        ) : error ? (
+          <FantasyError error={error} onEditTeam={onEditTeam} />
+        ) : (
+          <p className="py-6 text-center text-sm text-zinc-500">Loading matchup…</p>
+        )}
       </Panel>
     );
   }
@@ -23,7 +41,8 @@ export function Matchup({ fantasy, board, error }: Props) {
 
   return (
     <Panel title={`My matchup · Week ${fantasy.week}`}>
-      {error && <FantasyError error={error} stale />}
+      {tabs}
+      {error && <FantasyError error={error} stale onEditTeam={onEditTeam} />}
       <Totals me={me} opponent={opponent} />
 
       {opponent === null && <p className="mb-3 text-sm text-zinc-400">No opponent this week.</p>}
@@ -136,12 +155,18 @@ function Points({ value }: { value: number }) {
   );
 }
 
-function FantasyError({ error, stale = false }: { error: ApiFetchError; stale?: boolean }) {
-  const message =
-    error.code === "espn_auth"
-      ? "ESPN refused the fantasy request. Refresh the ESPN cookies (ESPN_S2 and ESPN_SWID) in the environment settings."
-      : error.code === "config"
-        ? error.message
-        : `Couldn't load the fantasy matchup: ${error.message}`;
-  return <p className={`mb-3 rounded-md px-3 py-2 text-sm ${error.code === "espn_auth" ? "bg-red-950 text-red-200" : "bg-amber-950/60 text-amber-200"}`}>{stale ? `${message} Showing the last data we got.` : message}</p>;
+function FantasyError({ error, stale = false, onEditTeam }: { error: ApiFetchError; stale?: boolean; onEditTeam: (() => void) | null }) {
+  // The server's espn_auth message already says whether the league needs cookies or the cookies expired.
+  const message = error.code === "espn_auth" || error.code === "config" ? error.message : `Couldn't load the fantasy matchup: ${error.message}`;
+  const auth = error.code === "espn_auth";
+  return (
+    <div className={`mb-3 rounded-md px-3 py-2 text-sm ${auth ? "bg-red-950 text-red-200" : "bg-amber-950/60 text-amber-200"}`}>
+      <p>{stale ? `${message} Showing the last data we got.` : message}</p>
+      {auth && onEditTeam && (
+        <button type="button" onClick={onEditTeam} className="mt-2 rounded-md bg-red-200 px-2.5 py-1 text-xs font-semibold text-red-950 hover:bg-white">
+          Edit this team
+        </button>
+      )}
+    </div>
+  );
 }

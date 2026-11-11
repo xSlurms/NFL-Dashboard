@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleFantasy, handleOdds, handlePlays, handleScoreboard } from "../src/server/api/handlers.ts";
 import { detectBigPlays } from "../src/server/espn/detectBigPlays.ts";
-import { EspnFantasySource, fantasyConfigFromEnv } from "../src/server/espn/espnFantasySource.ts";
+import { EspnFantasySource, clearWeekCache, fantasyConfig } from "../src/server/espn/espnFantasySource.ts";
 import { EspnNflSource } from "../src/server/espn/espnNflSource.ts";
 import { normalizeScoreboard } from "../src/server/espn/normalizeScoreboard.ts";
 import { UpstreamError } from "../src/server/http.ts";
@@ -160,12 +160,26 @@ describe("GET /api/fantasy", () => {
     expect(await body(res)).toEqual(matchup);
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=10");
     expect(res.headers.get("Netlify-CDN-Cache-Control")).toBeNull();
+    expect(res.headers.get("Vary")).toContain("X-Espn-S2"); // a browser never reuses one league's answer for other cookies
   });
 
-  it("reports missing configuration by variable name", async () => {
-    const res = await handleFantasy(get("/api/fantasy"), () => new EspnFantasySource(fantasyConfigFromEnv({ LEAGUE_ID: "338094" })));
-    expect(res.status).toBe(500);
-    expect((await body<ApiError>(res)).error).toEqual({ code: "config", message: "Missing or invalid environment variables: TEAM_ID, SEASON" });
+  it("asks the page for a team when none is given: there is no default", async () => {
+    const res = await handleFantasy(get("/api/fantasy"), (query, headers) => new EspnFantasySource(fantasyConfig(query, headers)));
+    expect(res.status).toBe(404);
+    expect((await body<ApiError>(res)).error.code).toBe("no_team");
+  });
+
+  it("passes the team from the query, and rejects a bad one", async () => {
+    let seen: URLSearchParams | null = null;
+    const res = await handleFantasy(get("/api/fantasy?leagueId=55&teamId=3"), (query) => {
+      seen = query;
+      return source(async () => matchup);
+    });
+    expect(res.status).toBe(200);
+    expect(seen!.get("leagueId")).toBe("55");
+    const bad = await handleFantasy(get("/api/fantasy?leagueId=55"), (query, headers) => new EspnFantasySource(fantasyConfig(query, headers)));
+    expect(bad.status).toBe(400);
+    expect((await body<ApiError>(bad)).error.code).toBe("bad_request");
   });
 
   it("tells the page to refresh cookies when ESPN refuses", async () => {
@@ -251,6 +265,7 @@ describe("EspnFantasySource", () => {
   };
   const route: Route = (url) => (url.searchParams.getAll("view").includes("mStatus") ? jsonResponse(status) : jsonResponse(league));
   const config = { leagueId: "338094", teamId: 4, season: 2026 };
+  beforeEach(() => clearWeekCache()); // each test sees the full two-call flow
 
   it("asks for the current week, then only that week's matchups", async () => {
     const calls = stubFetch(route);
@@ -286,16 +301,102 @@ describe("EspnFantasySource", () => {
   });
 });
 
-describe("fantasyConfigFromEnv", () => {
-  it("reads and trims the values, with cookies optional", () => {
-    expect(fantasyConfigFromEnv({ LEAGUE_ID: " 338094 ", TEAM_ID: "4", SEASON: "2026", ESPN_S2: " ", ESPN_SWID: "" })).toEqual({
-      leagueId: "338094", teamId: 4, season: 2026, espnS2: undefined, swid: undefined,
-    });
+describe("fantasyConfig", () => {
+  const q = (s: string) => new URLSearchParams(s);
+  const h = (headers: Record<string, string> = {}) => new Headers(headers);
+  const nov2026 = new Date("2026-11-10T12:00:00Z");
+
+  it("takes the team from the request, picking the current season", () => {
+    expect(fantasyConfig(q("leagueId=12345&teamId=3"), h(), nov2026)).toEqual({ leagueId: "12345", teamId: 3, season: 2026 });
+    expect(fantasyConfig(q("leagueId=12345&teamId=3"), h(), new Date("2027-01-20T12:00:00Z")).season).toBe(2026); // playoffs run into January
+    expect(fantasyConfig(q("leagueId=338094&teamId=7&season=2025")).season).toBe(2025);
   });
 
-  it("names bad variables without echoing their values", () => {
-    expect(() => fantasyConfigFromEnv({ LEAGUE_ID: "x'; drop", TEAM_ID: "-1", SEASON: "2026" })).toThrow(
-      /^Missing or invalid environment variables: LEAGUE_ID, TEAM_ID$/,
+  it("has no default team and ignores any server environment", () => {
+    const saved = { ...process.env };
+    process.env.LEAGUE_ID = "338094";
+    process.env.TEAM_ID = "4";
+    process.env.ESPN_S2 = "SERVER-S2";
+    try {
+      expect(() => fantasyConfig()).toThrow(expect.objectContaining({ code: "no_team" }));
+      expect(fantasyConfig(q("leagueId=338094&teamId=4"))).not.toHaveProperty("espnS2");
+    } finally {
+      process.env = saved;
+    }
+  });
+
+  it.each([
+    ["leagueId=338094", "together"],
+    ["teamId=4", "together"],
+    ["leagueId=abc&teamId=4", "league number"],
+    ["leagueId=1&teamId=0", "teamId"],
+    ["leagueId=1&teamId=4&season=26", "season"],
+  ])("rejects ?%s", (query, message) => {
+    expect(() => fantasyConfig(q(query))).toThrow(expect.objectContaining({ code: "bad_request", message: expect.stringContaining(message) }));
+  });
+
+  describe("a private league's cookies from the page", () => {
+    const s2 = "AEBx%2Fabc123%3D%3Dmore%2Bstuff0123456789";
+    const swid = "1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D";
+
+    it("uses them for the league in the same request, adding SWID's braces", () => {
+      const config = fantasyConfig(q("leagueId=777&teamId=2"), h({ "X-Espn-S2": s2, "X-Espn-Swid": swid }), nov2026);
+      expect(config).toEqual({ leagueId: "777", teamId: 2, season: 2026, espnS2: s2, swid: `{${swid}}` });
+    });
+
+    it.each([
+      [{ "X-Espn-S2": s2 }, "together"],
+      [{ "X-Espn-Swid": swid }, "together"],
+      [{ "X-Espn-S2": `${s2}; SWID=x`, "X-Espn-Swid": swid }, "espn_s2"],
+      [{ "X-Espn-S2": s2, "X-Espn-Swid": "nope" }, "SWID"],
+    ])("rejects bad cookie headers without echoing them", (headers, message) => {
+      let error: Error | null = null;
+      try {
+        fantasyConfig(q("leagueId=777&teamId=2"), h(headers), nov2026);
+      } catch (e) {
+        error = e as Error;
+      }
+      expect(error).toMatchObject({ code: "bad_request", message: expect.stringContaining(message) });
+      expect(error!.message).not.toContain(s2);
+      expect(error!.message).not.toContain(swid);
+    });
+  });
+});
+
+describe("EspnFantasySource week cache", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearWeekCache();
+  });
+
+  it("asks ESPN for the current week once, then reuses it for that league", async () => {
+    clearWeekCache();
+    const calls = stubFetch((url) =>
+      url.searchParams.getAll("view").includes("mStatus")
+        ? jsonResponse({ scoringPeriodId: 10, status: { currentMatchupPeriod: 10 } })
+        : jsonResponse({ seasonId: 2026, teams: [], schedule: [] }),
     );
+    const config = { leagueId: "338094", teamId: 4, season: 2026 };
+    await new EspnFantasySource(config).getMatchup();
+    await new EspnFantasySource(config).getMatchup();
+    await new EspnFantasySource({ ...config, teamId: 7 }).getMatchup(); // same league, another team
+    await new EspnFantasySource({ ...config, leagueId: "999" }).getMatchup(); // another league
+    const statusCalls = calls.filter((c) => c.url.searchParams.getAll("view").includes("mStatus"));
+    expect(statusCalls.map((c) => c.url.pathname.split("/").at(-1))).toEqual(["338094", "999"]);
+    expect(calls).toHaveLength(6);
+  });
+});
+
+describe("EspnFantasySource with a private league's cookies", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends them to ESPN as cookies, and says they may have expired when ESPN refuses", async () => {
+    const calls = stubFetch(() => new Response("", { status: 401 }));
+    const config = { leagueId: "777", teamId: 2, season: 2026, espnS2: "S2VALUE", swid: "{SWID}" };
+    const promise = new EspnFantasySource(config).getMatchup();
+    await expect(promise).rejects.toThrow(/expired/);
+    expect(calls[0].headers.Cookie).toBe("espn_s2=S2VALUE; SWID={SWID}");
+    stubFetch(() => new Response("", { status: 401 }));
+    await expect(new EspnFantasySource({ leagueId: "777", teamId: 2, season: 2026 }).getMatchup()).rejects.toThrow(/private/);
   });
 });

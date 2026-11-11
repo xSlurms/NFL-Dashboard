@@ -1,5 +1,5 @@
 // Which games to ask /api/plays about, and how long to wait between polls.
-import type { Game, GameState, PlaysResponse } from "../shared/types.ts";
+import type { FantasyMatchup, Game, GameState, PlaysResponse } from "../shared/types.ts";
 
 /** Keep polling a game this long after it goes final, to catch late corrections and reviews. */
 export const FINAL_SWEEP_MS = 10 * 60_000;
@@ -45,6 +45,20 @@ export function markFetched(watch: GameWatch, games: Game[], response: PlaysResp
   return { ...watch, doneFinal };
 }
 
+/** How often a hidden tab refreshes, when it still has alerts to deliver. */
+export const HIDDEN_POLL_MS = 60_000;
+
+/**
+ * The wait before the next refresh, given whether the tab is hidden. A hidden tab with notifications
+ * or sound on refreshes at most once a minute so alerts still arrive; with both off nothing would
+ * reach the person, so it pauses (null) until the tab is shown again.
+ */
+export function backgroundDelay(visibleDelay: number, hidden: boolean, alertsInBackground: boolean): number | null {
+  if (!hidden) return visibleDelay;
+  if (!alertsInBackground) return null;
+  return Math.max(visibleDelay, HIDDEN_POLL_MS);
+}
+
 /** Fast while anything is live, about to kick off, or in its final sweep; every 5 minutes otherwise. */
 export function pollDelay(games: Game[], watch: GameWatch, now: number, liveMs: number): number {
   const busy = games.some(
@@ -54,6 +68,22 @@ export function pollDelay(games: Game[], watch: GameWatch, now: number, liveMs: 
       (watch.sweepUntil.get(g.id) ?? 0) > now,
   );
   return busy ? liveMs : IDLE_POLL_MS;
+}
+
+/**
+ * Whether the matchup can be changing right now: a game with any starter (mine or the opponent's) is live,
+ * about to kick off, or in its final sweep. Otherwise fantasy points can't move, so it's polled slowly.
+ */
+export function matchupIsLive(games: Game[], matchup: FantasyMatchup | null, watch: GameWatch, now: number): boolean {
+  if (!matchup) return true;
+  const teams = new Set([...matchup.me.starters, ...(matchup.opponent?.starters ?? [])].map((s) => s.proTeamId));
+  return games.some(
+    (g) =>
+      (teams.has(g.home.id) || teams.has(g.away.id)) &&
+      (g.state === "in" ||
+        (g.state === "pre" && Date.parse(g.startTime) - now < KICKOFF_SOON_MS) ||
+        (watch.sweepUntil.get(g.id) ?? 0) > now),
+  );
 }
 
 /** ESPN drops possession between plays; keep the last team that had the ball while the game is live. */

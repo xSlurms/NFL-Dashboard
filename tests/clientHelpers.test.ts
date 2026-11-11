@@ -22,6 +22,8 @@ describe("settings", () => {
       notifications: true,
       sound: true,
       tickerFilter: "mine" as const,
+      teams: [{ leagueId: "338094", teamId: 7, season: 2026, key: "338094:7:2026", name: "Seven", espnS2: null, swid: null }],
+      activeTeam: "338094:7:2026",
     };
     expect(parseSettings(JSON.parse(JSON.stringify(custom)))).toEqual(custom);
   });
